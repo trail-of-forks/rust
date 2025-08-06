@@ -88,6 +88,10 @@ fn intrinsic_operation_unsafety(tcx: TyCtxt<'_>, intrinsic_id: LocalDefId) -> hi
         | sym::ctpop
         | sym::ctlz
         | sym::cttz
+        | sym::ct_select_i8
+        | sym::ct_select_i16
+        | sym::ct_select_i32
+        | sym::ct_select_i64
         | sym::bswap
         | sym::bitreverse
         | sym::three_way_compare
@@ -395,6 +399,11 @@ pub(crate) fn check_intrinsic_type(
         sym::ctpop | sym::ctlz | sym::ctlz_nonzero | sym::cttz | sym::cttz_nonzero => {
             (1, 0, vec![param(0)], tcx.types.u32)
         }
+
+        sym::ct_select_i8 => (0, 0, vec![tcx.types.bool, tcx.types.i8, tcx.types.i8], tcx.types.i8),
+        sym::ct_select_i16 => (0, 0, vec![tcx.types.bool, tcx.types.i16, tcx.types.i16], tcx.types.i16),
+        sym::ct_select_i32 => (0, 0, vec![tcx.types.bool, tcx.types.i32, tcx.types.i32], tcx.types.i32),
+        sym::ct_select_i64 => (0, 0, vec![tcx.types.bool, tcx.types.i64, tcx.types.i64], tcx.types.i64),
 
         sym::bswap | sym::bitreverse => (1, 0, vec![param(0)], param(0)),
 

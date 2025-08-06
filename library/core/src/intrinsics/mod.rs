@@ -3208,3 +3208,25 @@ pub unsafe fn va_arg<T: VaArgSafe>(ap: &mut VaListImpl<'_>) -> T;
 #[rustc_intrinsic]
 #[rustc_nounwind]
 pub unsafe fn va_end(ap: &mut VaListImpl<'_>);
+
+
+/// Conditionally select between two i8 values
+/// 
+/// Returns `true_val` if `cond` is true, otherwise returns `false_val`.
+/// This may be more efficient than a regular conditional in some cases.
+#[rustc_intrinsic]
+#[rustc_nounwind]
+pub fn ct_select_i8(cond: bool, true_val: i8, false_val: i8) -> i8;
+
+
+#[rustc_intrinsic]
+#[rustc_nounwind]
+pub fn ct_select_i16(cond: bool, true_val: i16, false_val: i16) -> i16;
+
+#[rustc_intrinsic]
+#[rustc_nounwind]
+pub fn ct_select_i32(cond: bool, true_val: i32, false_val: i32) -> i32;
+
+#[rustc_intrinsic]
+#[rustc_nounwind]
+pub fn ct_select_i64(cond: bool, true_val: i64, false_val: i64) -> i64;

@@ -1,7 +1,7 @@
 use std::assert_matches::assert_matches;
 use std::cmp::Ordering;
 
-use rustc_abi::{Align, BackendRepr, ExternAbi, Float, HasDataLayout, Primitive, Size};
+use rustc_abi::{Align, BackendRepr, ExternAbi, Float, HasDataLayout, Integer, Primitive, Size};
 use rustc_codegen_ssa::base::{compare_simd_types, wants_msvc_seh, wants_wasm_eh};
 use rustc_codegen_ssa::common::{IntPredicate, TypeKind};
 use rustc_codegen_ssa::errors::{ExpectedPointerMutability, InvalidMonomorphization};
@@ -10,7 +10,7 @@ use rustc_codegen_ssa::mir::place::{PlaceRef, PlaceValue};
 use rustc_codegen_ssa::traits::*;
 use rustc_hir as hir;
 use rustc_middle::mir::BinOp;
-use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, HasTypingEnv, LayoutOf};
+use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, HasTypingEnv, IntegerExt, LayoutOf};
 use rustc_middle::ty::{self, GenericArgsRef, Ty};
 use rustc_middle::{bug, span_bug};
 use rustc_span::{Span, Symbol, sym};
@@ -435,6 +435,35 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                     }
                     _ => bug!(),
                 }
+            }
+
+            sym::ct_select_i8 | sym::ct_select_i16 | sym::ct_select_i32 | sym::ct_select_i64 => {
+                let ty = args[1].layout.ty; // Get type from true_val (second argument)
+                let llvm_name = match ty.kind() {
+                    ty::Int(int_ty) => {
+                        let width = Integer::from_int_ty(&tcx, *int_ty).size().bits();
+                        format!("llvm.ct.select.i{}", width)
+                    }
+                    ty::Uint(uint_ty) => {
+                        let width = Integer::from_uint_ty(&tcx, *uint_ty).size().bits();
+                        format!("llvm.ct.select.i{}", width)
+                    }
+                    _ => {
+                        tcx.dcx().emit_err(InvalidMonomorphization::BasicIntegerType {
+                            span,
+                            name,
+                            ty,
+                        });
+                        return Ok(());
+                    }
+                };
+
+                // Arguments: condition (i1), true_val (T), false_val (T)
+                self.call_intrinsic(llvm_name, &[], &[
+                    args[0].immediate(), // condition
+                    args[1].immediate(), // true_val  
+                    args[2].immediate()  // false_val
+                ])
             }
 
             sym::raw_eq => {
