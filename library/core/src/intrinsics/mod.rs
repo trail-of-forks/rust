@@ -62,6 +62,7 @@ mod bounds;
 pub mod fallback;
 pub mod mir;
 pub mod simd;
+pub mod select;
 
 // These imports are used for simplifying intra-doc links
 #[allow(unused_imports)]
