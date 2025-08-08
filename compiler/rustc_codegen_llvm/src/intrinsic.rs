@@ -459,7 +459,8 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                 };
 
                 // Arguments: condition (i1), true_val (T), false_val (T)
-                self.call_intrinsic(llvm_name, &[], &[
+                let llty = args[1].layout.immediate_llvm_type(self.cx);
+                self.call_intrinsic(llvm_name, &[llty], &[
                     args[0].immediate(), // condition
                     args[1].immediate(), // true_val  
                     args[2].immediate()  // false_val
