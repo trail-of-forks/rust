@@ -88,10 +88,12 @@ fn intrinsic_operation_unsafety(tcx: TyCtxt<'_>, intrinsic_id: LocalDefId) -> hi
         | sym::ctpop
         | sym::ctlz
         | sym::cttz
+        | sym::ct_select_bool
         | sym::ct_select_i8
         | sym::ct_select_i16
         | sym::ct_select_i32
         | sym::ct_select_i64
+        | sym::ct_select_ptr
         | sym::bswap
         | sym::bitreverse
         | sym::three_way_compare
@@ -400,10 +402,12 @@ pub(crate) fn check_intrinsic_type(
             (1, 0, vec![param(0)], tcx.types.u32)
         }
 
+        sym::ct_select_bool => (0, 0, vec![tcx.types.bool, tcx.types.bool, tcx.types.bool], tcx.types.bool),
         sym::ct_select_i8 => (0, 0, vec![tcx.types.bool, tcx.types.i8, tcx.types.i8], tcx.types.i8),
         sym::ct_select_i16 => (0, 0, vec![tcx.types.bool, tcx.types.i16, tcx.types.i16], tcx.types.i16),
         sym::ct_select_i32 => (0, 0, vec![tcx.types.bool, tcx.types.i32, tcx.types.i32], tcx.types.i32),
         sym::ct_select_i64 => (0, 0, vec![tcx.types.bool, tcx.types.i64, tcx.types.i64], tcx.types.i64),
+        sym::ct_select_ptr => (0, 0, vec![tcx.types.bool, Ty::new_mut_ptr(tcx, tcx.types.u8), Ty::new_mut_ptr(tcx, tcx.types.u8)], Ty::new_mut_ptr(tcx, tcx.types.u8)),
 
         sym::bswap | sym::bitreverse => (1, 0, vec![param(0)], param(0)),
 

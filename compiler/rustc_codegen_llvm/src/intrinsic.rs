@@ -1,7 +1,7 @@
 use std::assert_matches::assert_matches;
 use std::cmp::Ordering;
 
-use rustc_abi::{Align, BackendRepr, ExternAbi, Float, HasDataLayout, Integer, Primitive, Size};
+use rustc_abi::{Align, BackendRepr, ExternAbi, Float, HasDataLayout, Primitive, Size};
 use rustc_codegen_ssa::base::{compare_simd_types, wants_msvc_seh, wants_wasm_eh};
 use rustc_codegen_ssa::common::{IntPredicate, TypeKind};
 use rustc_codegen_ssa::errors::{ExpectedPointerMutability, InvalidMonomorphization};
@@ -10,7 +10,7 @@ use rustc_codegen_ssa::mir::place::{PlaceRef, PlaceValue};
 use rustc_codegen_ssa::traits::*;
 use rustc_hir as hir;
 use rustc_middle::mir::BinOp;
-use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, HasTypingEnv, IntegerExt, LayoutOf};
+use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, HasTypingEnv, LayoutOf};
 use rustc_middle::ty::{self, GenericArgsRef, Ty};
 use rustc_middle::{bug, span_bug};
 use rustc_span::{Span, Symbol, sym};
@@ -438,16 +438,15 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
             }
 
             sym::ct_select_i8 | sym::ct_select_i16 | sym::ct_select_i32 | sym::ct_select_i64 => {
-                let ty = args[1].layout.ty; // Get type from true_val (second argument)
-                let llvm_name = match ty.kind() {
-                    ty::Int(int_ty) => {
-                        let width = Integer::from_int_ty(&tcx, *int_ty).size().bits();
-                        format!("llvm.ct.select.i{}", width)
-                    }
-                    ty::Uint(uint_ty) => {
-                        let width = Integer::from_uint_ty(&tcx, *uint_ty).size().bits();
-                        format!("llvm.ct.select.i{}", width)
-                    }
+                // Validate & derive the integer width from the *layout* of true_val.
+                let val_layout = args[1].layout;
+                let width = val_layout.size.bits();
+                let ty = val_layout.ty;
+                let llvm_name = match width {
+                    8 => "llvm.ct.select.i8",
+                    16 => "llvm.ct.select.i16",
+                    32 => "llvm.ct.select.i32",
+                    64 => "llvm.ct.select.i64",
                     _ => {
                         tcx.dcx().emit_err(InvalidMonomorphization::BasicIntegerType {
                             span,
@@ -458,11 +457,82 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                     }
                 };
 
+                    // Compute the concrete LLVM integer type (iN) and i1 for the condition.
+                let ll_i_n = self.type_ix(width);
+                let ll_i1 = self.type_i1();
+                let cond = self.intcast(args[0].immediate(), ll_i1, /*is_signed=*/ false);
+
+                let is_signed = match args[1].layout.ty.kind() {
+                    ty::Int(_) => true,
+                    ty::Uint(_) => false,
+                    _ => {
+                        tcx.dcx().emit_err(InvalidMonomorphization::BasicIntegerType {
+                            span,
+                            name,
+                            ty: args[1].layout.ty,
+                        });
+                        return Ok(());
+                    }
+                };
+
+                let t_val = self.intcast(args[1].immediate(), ll_i_n, is_signed);
+                let f_val = self.intcast(args[2].immediate(), ll_i_n, is_signed);
+
                 // Arguments: condition (i1), true_val (T), false_val (T)
-                let llty = args[1].layout.immediate_llvm_type(self.cx);
-                self.call_intrinsic(llvm_name, &[llty], &[
-                    args[0].immediate(), // condition
-                    args[1].immediate(), // true_val  
+                self.call_intrinsic(llvm_name, &[ll_i_n], &[
+                    cond, // condition
+                    t_val, // true_val
+                    f_val  // false_val
+                ])
+            }
+
+            sym::ct_select_bool => {
+                // Handle constant-time boolean selection
+                let ll_i1 = self.type_i1();
+                let cond = self.intcast(args[0].immediate(), ll_i1, /*is_signed=*/ false);
+                let t_val = self.intcast(args[1].immediate(), ll_i1, /*is_signed=*/ false);
+                let f_val = self.intcast(args[2].immediate(), ll_i1, /*is_signed=*/ false);
+
+                // Arguments: condition (i1), true_val (i1), false_val (i1)
+                self.call_intrinsic("llvm.ct.select.i1", &[ll_i1], &[
+                    cond, // condition
+                    t_val, // true_val
+                    f_val  // false_val
+                ])
+            }
+
+            sym::ct_select_ptr => {
+                // Handle constant-time pointer selection
+                let val_layout = args[1].layout;
+                let ty = val_layout.ty;
+
+                // Verify that we have pointer types for true_val and false_val
+                match ty.kind() {
+                    ty::RawPtr(_, _) => {
+                        // Valid pointer type
+                    }
+                    _ => {
+                        tcx.dcx().emit_err(InvalidMonomorphization::ExpectedPointer {
+                            span,
+                            name,
+                            ty,
+                        });
+                        return Ok(());
+                    }
+                }
+
+                // Ensure true_val and false_val have the same type
+                assert_eq!(args[1].layout.ty, args[2].layout.ty);
+
+                // Get the exact LLVM type for this pointer type
+                let ll_ptr_type = args[1].layout.immediate_llvm_type(self.cx);
+                let ll_i1 = self.type_i1();
+                let cond = self.intcast(args[0].immediate(), ll_i1, /*is_signed=*/ false);
+
+                // Arguments: condition (i1), true_val (ptr), false_val (ptr)
+                self.call_intrinsic("llvm.ct.select.ptr", &[ll_ptr_type], &[
+                    cond, // condition
+                    args[1].immediate(), // true_val
                     args[2].immediate()  // false_val
                 ])
             }
