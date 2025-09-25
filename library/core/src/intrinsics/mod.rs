@@ -3231,3 +3231,11 @@ pub fn ct_select_i32(cond: bool, true_val: i32, false_val: i32) -> i32;
 #[rustc_intrinsic]
 #[rustc_nounwind]
 pub fn ct_select_i64(cond: bool, true_val: i64, false_val: i64) -> i64;
+
+#[rustc_intrinsic]
+#[rustc_nounwind]
+pub fn ct_select_ptr(cond: bool, true_val: *mut u8, false_val: *mut u8) -> *mut u8;
+
+#[rustc_intrinsic]
+#[rustc_nounwind]
+pub fn ct_select_bool(cond: bool, true_val: bool, false_val: bool) -> bool;
